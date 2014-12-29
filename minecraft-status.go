@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"minecraft-status/data"
-	"minecraft-status/protocol"
+	"github.com/geNAZt/minecraft-status/data"
+	"github.com/geNAZt/minecraft-status/protocol"
 	"time"
 )
 
