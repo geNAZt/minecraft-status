@@ -1,8 +1,7 @@
-package main
+package minecraftstatus
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/geNAZt/minecraft-status/data"
 	"github.com/geNAZt/minecraft-status/protocol"
 	"time"
@@ -42,15 +41,6 @@ func GetStatus(host string) (*data.Status, error) {
 	status.Ping = pingTime
 
 	return status, nil
-}
-
-func main() {
-	status, err := GetStatus("gommehd.net")
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Printf("%v", status)
 }
 
 func getPing(conn *protocol.Conn) (time.Duration, error) {

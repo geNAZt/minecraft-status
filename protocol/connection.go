@@ -18,13 +18,13 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"net"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"math/rand"
 )
 
 func init() {
