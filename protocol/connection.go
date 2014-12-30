@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"math/rand"
 )
 
 func init() {
@@ -114,9 +115,7 @@ func NewNetClient(host string) (*Conn, error) {
 	}
 
 	// Get the resolved IP
-	newHost = ip[0].To4().String()
-
-	fmt.Println("Connecting to: " + newHost + ":" + port)
+	newHost = ip[rand.Intn(len(ip))].To4().String()
 
 	// Connect
 	conn, err := net.Dial("tcp", newHost+":"+port)
