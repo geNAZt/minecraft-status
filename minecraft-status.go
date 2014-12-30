@@ -1,4 +1,4 @@
-package main
+package minecraftstatus
 
 import (
 	"encoding/json"
@@ -72,10 +72,6 @@ func GetStatus(host string) (*data.Status, error) {
 	}
 
 	return status, nil
-}
-
-func main() {
-	GetStatus("play.timolia.de")
 }
 
 func getPing(conn *protocol.Conn) (time.Duration, error) {
