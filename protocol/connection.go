@@ -114,13 +114,25 @@ func NewNetClient(host string) (*Conn, error) {
 		return nil, errIp
 	}
 
-	// Get the resolved IP
-	newHost = ip[rand.Intn(len(ip))].To4().String()
+	var conn net.Conn
+	for {
+		index := rand.Intn(len(ip))
 
-	// Connect
-	conn, err := net.Dial("tcp", newHost+":"+port)
-	if err != nil {
-		return nil, err
+		// Get the resolved IP
+		newHost = ip[index].To4().String()
+
+		// Connect
+		tempConn, err := net.Dial("tcp", newHost+":"+port)
+		if err != nil && len(ip) == 0 {
+			return nil, err
+		} else if err != nil {
+			// Remove this ip
+			ip = append(ip[:index], ip[index+1:]...)
+			continue
+		}
+
+		conn = tempConn
+		break
 	}
 
 	ui, errUi := strconv.ParseUint(port, 10, 16)
