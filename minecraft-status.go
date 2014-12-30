@@ -1,9 +1,10 @@
-package minecraftstatus
+package main
 
 import (
 	"encoding/json"
 	"github.com/geNAZt/minecraft-status/data"
 	"github.com/geNAZt/minecraft-status/protocol"
+	"reflect"
 	"time"
 )
 
@@ -39,8 +40,42 @@ func GetStatus(host string) (*data.Status, error) {
 	}
 
 	status.Ping = pingTime
+	status.Favicons = []data.Favicon{}
+
+	// Wait for additional Favicons (animated motd hack)
+	for {
+		starttime := time.Now()
+		additionalStatusPacket, errPacket := conn.ReadPacket()
+		if errPacket != nil {
+			break
+		}
+
+		// Check if packet is correct
+		if !reflect.TypeOf(additionalStatusPacket).AssignableTo(reflect.TypeOf(protocol.StatusResponse{})) {
+			continue
+		}
+
+		// Parse the status
+		additionalStatus := &data.Status{}
+		errJson := json.Unmarshal([]byte(additionalStatusPacket.(protocol.StatusResponse).Data), additionalStatus)
+		if errJson != nil {
+			continue
+		}
+
+		favicon := data.Favicon{
+			Icon:        status.Favicon,
+			DisplayTime: int32(time.Now().Sub(starttime) / time.Millisecond),
+		}
+
+		status.Favicons = append(status.Favicons, favicon)
+		status.Favicon = additionalStatus.Favicon
+	}
 
 	return status, nil
+}
+
+func main() {
+	GetStatus("play.timolia.de")
 }
 
 func getPing(conn *protocol.Conn) (time.Duration, error) {
