@@ -53,10 +53,7 @@ type VarInt int
 //    map[byte]interface{} //Encoded as entity metadata
 //    VarInt
 type Conn struct {
-	In  io.Reader
-	Out io.Writer
-
-	Deadliner Deadliner
+	Conn net.Conn
 
 	//Used on the write goroutine
 	b [8]byte
@@ -69,11 +66,6 @@ type Conn struct {
 
 	Host string
 	Port uint16
-}
-
-type Deadliner interface {
-	SetReadDeadline(t time.Time) error
-	SetWriteDeadline(t time.Time) error
 }
 
 func NewNetClient(host string) (*Conn, error) {
@@ -142,9 +134,7 @@ func NewNetClient(host string) (*Conn, error) {
 
 	// Construct the new Connection struct
 	mcConn := &Conn{
-		In:             conn,
-		Out:            conn,
-		Deadliner:      conn,
+		Conn:           conn,
 		ReadDirection:  Clientbound,
 		WriteDirection: Serverbound,
 		Host:           portSplits[0],
@@ -154,10 +144,14 @@ func NewNetClient(host string) (*Conn, error) {
 	return mcConn, nil
 }
 
+func (conn *Conn) Close() {
+	conn.Conn.Close()
+}
+
 //Reads a minecraft packet from conn
 func (conn *Conn) ReadPacket() (Packet, error) {
-	if conn.Deadliner != nil {
-		conn.Deadliner.SetReadDeadline(time.Now().Add(10 * time.Second))
+	if conn.Conn != nil {
+		conn.Conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 	}
 
 	l, err := readVarInt(conn)
@@ -165,13 +159,13 @@ func (conn *Conn) ReadPacket() (Packet, error) {
 		return nil, err
 	}
 	buf := make([]byte, l)
-	_, err = io.ReadFull(conn.In, buf)
+	_, err = io.ReadFull(conn.Conn, buf)
 	if err != nil {
 		return nil, err
 	}
 
-	temp := conn.In
-	conn.In = bytes.NewReader(buf)
+	temp := conn.Conn
+	conn.Conn = bytes.NewReader(buf)
 
 	id, err := readVarInt(conn)
 	if err != nil {
@@ -199,19 +193,19 @@ func (conn *Conn) ReadPacket() (Packet, error) {
 			}
 		}
 	}
-	conn.In = temp
+	conn.Conn = temp
 	return val.Interface().(Packet), nil
 }
 
 //Writes the packet to conn
 func (conn *Conn) WritePacket(packet Packet) {
-	if conn.Deadliner != nil {
-		conn.Deadliner.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	if conn.Conn != nil {
+		conn.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	}
 
 	var buf bytes.Buffer
-	temp := conn.Out
-	conn.Out = &buf
+	temp := conn.Conn
+	conn.Conn = &buf
 
 	val := reflect.ValueOf(packet)
 	ty := val.Type()
@@ -230,9 +224,9 @@ func (conn *Conn) WritePacket(packet Packet) {
 			f.write(conn, v)
 		}
 	}
-	conn.Out = temp
+	conn.Conn = temp
 	writeVarInt(conn, VarInt(buf.Len()))
-	buf.WriteTo(conn.Out)
+	buf.WriteTo(conn.Conn)
 }
 
 var fieldCache struct {
@@ -435,21 +429,21 @@ func getSliceCoders(e reflect.Type, sf reflect.StructField) (encoder, decoder) {
 			switch lType {
 			case "int8":
 				bs = conn.rb[:1]
-				_, err := io.ReadFull(conn.In, bs)
+				_, err := io.ReadFull(conn.Conn, bs)
 				if err != nil {
 					return err
 				}
 				l = int(int8(bs[0]))
 			case "int16":
 				bs = conn.rb[:2]
-				_, err := io.ReadFull(conn.In, bs)
+				_, err := io.ReadFull(conn.Conn, bs)
 				if err != nil {
 					return err
 				}
 				l = int(int16(binary.BigEndian.Uint16(bs)))
 			case "int32":
 				bs = conn.rb[:4]
-				_, err := io.ReadFull(conn.In, bs)
+				_, err := io.ReadFull(conn.Conn, bs)
 				if err != nil {
 					return err
 				}
@@ -466,7 +460,7 @@ func getSliceCoders(e reflect.Type, sf reflect.StructField) (encoder, decoder) {
 			}
 			if l != nilValue {
 				b := make([]byte, l)
-				_, err := io.ReadFull(conn.In, b)
+				_, err := io.ReadFull(conn.Conn, b)
 				if err != nil {
 					return err
 				}
@@ -539,21 +533,21 @@ func getSliceCoders(e reflect.Type, sf reflect.StructField) (encoder, decoder) {
 			switch lType {
 			case "int8":
 				bs = conn.rb[:1]
-				_, err := io.ReadFull(conn.In, bs)
+				_, err := io.ReadFull(conn.Conn, bs)
 				if err != nil {
 					return err
 				}
 				l = int(int8(bs[0]))
 			case "int16":
 				bs = conn.rb[:2]
-				_, err := io.ReadFull(conn.In, bs)
+				_, err := io.ReadFull(conn.Conn, bs)
 				if err != nil {
 					return err
 				}
 				l = int(int16(binary.BigEndian.Uint16(bs)))
 			case "int32":
 				bs = conn.rb[:4]
-				_, err := io.ReadFull(conn.In, bs)
+				_, err := io.ReadFull(conn.Conn, bs)
 				if err != nil {
 					return err
 				}
@@ -605,7 +599,7 @@ func getSliceCoders(e reflect.Type, sf reflect.StructField) (encoder, decoder) {
 		default:
 			panic("Unknown length type")
 		}
-		conn.Out.Write(bs)
+		conn.Conn.Write(bs)
 		if !field.IsNil() {
 			write(conn, field)
 		}
@@ -644,22 +638,22 @@ func encodeMetadata(conn *Conn, field reflect.Value) {
 			manual = true
 			ty = 4
 			index[0] = (i & 0x1F) | (ty << 5)
-			conn.Out.Write(index)
+			conn.Conn.Write(index)
 			writeVarInt(conn, VarInt(len(v)))
-			conn.Out.Write([]byte(v))
+			conn.Conn.Write([]byte(v))
 			if !manual {
 				index[0] = (i & 0x1F) | (ty << 5)
-				conn.Out.Write(index)
-				conn.Out.Write(bs)
+				conn.Conn.Write(index)
+				conn.Conn.Write(bs)
 			}
 		}
-		conn.Out.Write([]byte{0x7F})
+		conn.Conn.Write([]byte{0x7F})
 	}
 }
 
 func decodeMetadata(conn *Conn, field reflect.Value) error {
 	index := make([]byte, 1)
-	_, err := io.ReadFull(conn.In, index)
+	_, err := io.ReadFull(conn.Conn, index)
 	if err != nil {
 		return err
 	}
@@ -673,7 +667,7 @@ func decodeMetadata(conn *Conn, field reflect.Value) error {
 		switch ty {
 		case 0:
 			bs = conn.rb[:1]
-			_, err := io.ReadFull(conn.In, bs)
+			_, err := io.ReadFull(conn.Conn, bs)
 			if err != nil {
 				return err
 			}
@@ -681,7 +675,7 @@ func decodeMetadata(conn *Conn, field reflect.Value) error {
 
 		case 1:
 			bs = conn.rb[:2]
-			_, err := io.ReadFull(conn.In, bs)
+			_, err := io.ReadFull(conn.Conn, bs)
 			if err != nil {
 				return err
 			}
@@ -689,7 +683,7 @@ func decodeMetadata(conn *Conn, field reflect.Value) error {
 
 		case 2:
 			bs = conn.rb[:4]
-			_, err := io.ReadFull(conn.In, bs)
+			_, err := io.ReadFull(conn.Conn, bs)
 			if err != nil {
 				return err
 			}
@@ -697,7 +691,7 @@ func decodeMetadata(conn *Conn, field reflect.Value) error {
 
 		case 3:
 			bs = conn.rb[:4]
-			_, err := io.ReadFull(conn.In, bs)
+			_, err := io.ReadFull(conn.Conn, bs)
 			if err != nil {
 				return err
 			}
@@ -709,11 +703,11 @@ func decodeMetadata(conn *Conn, field reflect.Value) error {
 				return err
 			}
 			b := make([]byte, l)
-			_, err = conn.In.Read(b)
+			_, err = conn.Conn.Read(b)
 			v = string(string(b))
 
 			m[i] = v
-			_, errRead := io.ReadFull(conn.In, index)
+			_, errRead := io.ReadFull(conn.Conn, index)
 			if errRead != nil {
 				return errRead
 			}
@@ -726,12 +720,12 @@ func decodeMetadata(conn *Conn, field reflect.Value) error {
 }
 
 func encodeByteSlice(conn *Conn, field reflect.Value) {
-	conn.Out.Write(field.Bytes())
+	conn.Conn.Write(field.Bytes())
 }
 
 func encodeString(conn *Conn, field reflect.Value) {
 	writeVarInt(conn, VarInt(field.Len()))
-	conn.Out.Write([]byte(field.String()))
+	conn.Conn.Write([]byte(field.String()))
 }
 
 func decodeString(conn *Conn, field reflect.Value) error {
@@ -740,7 +734,7 @@ func decodeString(conn *Conn, field reflect.Value) error {
 		return err
 	}
 	b := make([]byte, l)
-	_, err = conn.In.Read(b)
+	_, err = conn.Conn.Read(b)
 	field.SetString(string(b))
 	return err
 }
@@ -752,12 +746,12 @@ func encodeBool(conn *Conn, field reflect.Value) {
 	} else {
 		bs[0] = 0
 	}
-	conn.Out.Write(bs)
+	conn.Conn.Write(bs)
 }
 
 func decodeBool(conn *Conn, field reflect.Value) error {
 	bs := conn.rb[:1]
-	_, err := io.ReadFull(conn.In, bs)
+	_, err := io.ReadFull(conn.Conn, bs)
 	if err != nil {
 		return err
 	}
@@ -770,12 +764,12 @@ func decodeBool(conn *Conn, field reflect.Value) error {
 func encodeInt8(conn *Conn, field reflect.Value) {
 	bs := conn.b[:1]
 	bs[0] = byte(field.Int())
-	conn.Out.Write(bs)
+	conn.Conn.Write(bs)
 }
 
 func decodeInt8(conn *Conn, field reflect.Value) error {
 	bs := conn.rb[:1]
-	_, err := io.ReadFull(conn.In, bs)
+	_, err := io.ReadFull(conn.Conn, bs)
 	if err != nil {
 		return err
 	}
@@ -786,12 +780,12 @@ func decodeInt8(conn *Conn, field reflect.Value) error {
 func encodeUint8(conn *Conn, field reflect.Value) {
 	bs := conn.b[:1]
 	bs[0] = byte(field.Uint())
-	conn.Out.Write(bs)
+	conn.Conn.Write(bs)
 }
 
 func decodeUint8(conn *Conn, field reflect.Value) error {
 	bs := conn.rb[:1]
-	_, err := io.ReadFull(conn.In, bs)
+	_, err := io.ReadFull(conn.Conn, bs)
 	if err != nil {
 		return err
 	}
@@ -802,12 +796,12 @@ func decodeUint8(conn *Conn, field reflect.Value) error {
 func encodeInt16(conn *Conn, field reflect.Value) {
 	bs := conn.b[:2]
 	binary.BigEndian.PutUint16(bs, uint16(field.Int()))
-	conn.Out.Write(bs)
+	conn.Conn.Write(bs)
 }
 
 func decodeInt16(conn *Conn, field reflect.Value) error {
 	bs := conn.rb[:2]
-	_, err := io.ReadFull(conn.In, bs)
+	_, err := io.ReadFull(conn.Conn, bs)
 	if err != nil {
 		return err
 	}
@@ -818,12 +812,12 @@ func decodeInt16(conn *Conn, field reflect.Value) error {
 func encodeUint16(conn *Conn, field reflect.Value) {
 	bs := conn.b[:2]
 	binary.BigEndian.PutUint16(bs, uint16(field.Uint()))
-	conn.Out.Write(bs)
+	conn.Conn.Write(bs)
 }
 
 func decodeUint16(conn *Conn, field reflect.Value) error {
 	bs := conn.rb[:2]
-	_, err := io.ReadFull(conn.In, bs)
+	_, err := io.ReadFull(conn.Conn, bs)
 	if err != nil {
 		return err
 	}
@@ -834,12 +828,12 @@ func decodeUint16(conn *Conn, field reflect.Value) error {
 func encodeInt32(conn *Conn, field reflect.Value) {
 	bs := conn.b[:4]
 	binary.BigEndian.PutUint32(bs, uint32(field.Int()))
-	conn.Out.Write(bs)
+	conn.Conn.Write(bs)
 }
 
 func decodeInt32(conn *Conn, field reflect.Value) error {
 	bs := conn.rb[:4]
-	_, err := io.ReadFull(conn.In, bs)
+	_, err := io.ReadFull(conn.Conn, bs)
 	if err != nil {
 		return err
 	}
@@ -850,12 +844,12 @@ func decodeInt32(conn *Conn, field reflect.Value) error {
 func encodeInt64(conn *Conn, field reflect.Value) {
 	bs := conn.b[:8]
 	binary.BigEndian.PutUint64(bs, uint64(field.Int()))
-	conn.Out.Write(bs)
+	conn.Conn.Write(bs)
 }
 
 func decodeInt64(conn *Conn, field reflect.Value) error {
 	bs := conn.rb[:8]
-	_, err := io.ReadFull(conn.In, bs)
+	_, err := io.ReadFull(conn.Conn, bs)
 	if err != nil {
 		return err
 	}
@@ -866,12 +860,12 @@ func decodeInt64(conn *Conn, field reflect.Value) error {
 func encodeFloat32(conn *Conn, field reflect.Value) {
 	bs := conn.b[:4]
 	binary.BigEndian.PutUint32(bs, math.Float32bits(float32(field.Float())))
-	conn.Out.Write(bs)
+	conn.Conn.Write(bs)
 }
 
 func decodeFloat32(conn *Conn, field reflect.Value) error {
 	bs := conn.rb[:4]
-	_, err := io.ReadFull(conn.In, bs)
+	_, err := io.ReadFull(conn.Conn, bs)
 	if err != nil {
 		return err
 	}
@@ -882,12 +876,12 @@ func decodeFloat32(conn *Conn, field reflect.Value) error {
 func encodeFloat64(conn *Conn, field reflect.Value) {
 	bs := conn.b[:8]
 	binary.BigEndian.PutUint64(bs, math.Float64bits(field.Float()))
-	conn.Out.Write(bs)
+	conn.Conn.Write(bs)
 }
 
 func decodeFloat64(conn *Conn, field reflect.Value) error {
 	bs := conn.rb[:8]
-	_, err := io.ReadFull(conn.In, bs)
+	_, err := io.ReadFull(conn.Conn, bs)
 	if err != nil {
 		return err
 	}
@@ -907,7 +901,7 @@ func (b byteReader) ReadByte() (byte, error) {
 }
 
 func readVarInt(conn *Conn) (VarInt, error) {
-	x, err := binary.ReadUvarint(byteReader{conn.In, [1]byte{}})
+	x, err := binary.ReadUvarint(byteReader{conn.Conn, [1]byte{}})
 	return VarInt(int32(uint32(x))), err
 }
 
@@ -915,7 +909,7 @@ func readVarInt(conn *Conn) (VarInt, error) {
 func writeVarInt(conn *Conn, i VarInt) {
 	bs := conn.b[:]
 	n := binary.PutUvarint(bs, uint64(uint32(i)))
-	conn.Out.Write(bs[:n])
+	conn.Conn.Write(bs[:n])
 }
 
 func encodeVarInt(conn *Conn, field reflect.Value) {
