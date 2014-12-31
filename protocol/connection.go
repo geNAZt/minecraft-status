@@ -15,6 +15,7 @@ package protocol
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -113,6 +114,11 @@ func NewNetClient(host string) (*Conn, error) {
 	ip, errIp := net.LookupIP(newHost)
 	if errIp != nil {
 		return nil, errIp
+	}
+
+	// Fix invalid argument to rand
+	if len(ip) == 0 {
+		return nil, errors.New("IP lookup returned 0 ips")
 	}
 
 	var conn net.Conn
