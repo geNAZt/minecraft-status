@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func GetStatus(host string) (*data.Status, error) {
+func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 	// Create Client
 	conn, err := protocol.NewNetClient(host)
 	if err != nil {
@@ -42,34 +42,38 @@ func GetStatus(host string) (*data.Status, error) {
 	status.Ping = pingTime
 	status.Favicons = []data.Favicon{}
 
-	// Wait for additional Favicons (animated motd hack)
-	for {
-		starttime := time.Now()
-		additionalStatusPacket, errPacket := conn.ReadPacket()
-		if errPacket != nil {
-			break
-		}
+	if animatedFavicon {
+		// Wait for additional Favicons (animated motd hack)
+		for {
+			starttime := time.Now()
+			additionalStatusPacket, errPacket := conn.ReadPacket()
+			if errPacket != nil {
+				break
+			}
 
-		// Check if packet is correct
-		if !reflect.TypeOf(additionalStatusPacket).AssignableTo(reflect.TypeOf(protocol.StatusResponse{})) {
-			continue
-		}
+			// Check if packet is correct
+			if !reflect.TypeOf(additionalStatusPacket).AssignableTo(reflect.TypeOf(protocol.StatusResponse{})) {
+				continue
+			}
 
-		// Parse the status
-		additionalStatus := &data.Status{}
-		errJson := json.Unmarshal([]byte(additionalStatusPacket.(protocol.StatusResponse).Data), additionalStatus)
-		if errJson != nil {
-			continue
-		}
+			// Parse the status
+			additionalStatus := &data.Status{}
+			errJson := json.Unmarshal([]byte(additionalStatusPacket.(protocol.StatusResponse).Data), additionalStatus)
+			if errJson != nil {
+				continue
+			}
 
-		favicon := data.Favicon{
-			Icon:        status.Favicon,
-			DisplayTime: int32(time.Now().Sub(starttime) / time.Millisecond),
-		}
+			favicon := data.Favicon{
+				Icon:        status.Favicon,
+				DisplayTime: int32(time.Now().Sub(starttime) / time.Millisecond),
+			}
 
-		status.Favicons = append(status.Favicons, favicon)
-		status.Favicon = additionalStatus.Favicon
+			status.Favicons = append(status.Favicons, favicon)
+			status.Favicon = additionalStatus.Favicon
+		}
 	}
+
+	conn.Close()
 
 	return status, nil
 }
