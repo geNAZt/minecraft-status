@@ -38,11 +38,16 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 
 	pingTime = time.Now().Sub(starttime)
 
-	// Get the ping
-	tempPingTime, errPing := Ping(conn)
-	if errPing == nil && tempPingTime > 0 {
-		pingTime = tempPingTime
-	}
+	ch := make(chan bool, 1)
+	go func() {
+		// Get the ping
+		tempPingTime, errPing := Ping(conn)
+		if errPing == nil && tempPingTime > 0 {
+			pingTime = tempPingTime
+		}
+
+		ch <- true
+	}()
 
 	// Parse the status
 	status := &data.Status{}
@@ -93,5 +98,6 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 
 	conn.Close()
 
+	<-ch
 	return status, nil
 }
