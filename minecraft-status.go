@@ -27,16 +27,21 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 	}
 
 	// Now we need to send a Ping
+	var pingTime time.Duration
+	starttime := time.Now()
+
 	conn.SendClientStatusPing()
 	_, errPingPacket := conn.ReadPacket()
 	if errPingPacket != nil {
 		return nil, errPingPacket
 	}
 
+	pingTime = time.Now().Sub(starttime)
+
 	// Get the ping
-	pingTime, errPing := Ping(conn)
-	if errPing != nil {
-		return nil, errPing
+	tempPingTime, errPing := Ping(conn)
+	if errPing == nil {
+		pingTime = tempPingTime
 	}
 
 	// Parse the status
