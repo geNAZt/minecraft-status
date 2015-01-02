@@ -2,7 +2,6 @@ package minecraftstatus
 
 import (
 	"encoding/json"
-	"github.com/geNAZt/go-fastping"
 	"github.com/geNAZt/minecraft-status/data"
 	"github.com/geNAZt/minecraft-status/protocol"
 	"net"
@@ -10,15 +9,6 @@ import (
 	"sync"
 	"time"
 )
-
-var (
-	pinger *fastping.Pinger
-	lock   sync.Mutex
-)
-
-func init() {
-	pinger = fastping.NewPinger()
-}
 
 func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 	// Create Client
@@ -46,7 +36,7 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 	}
 
 	// Get the ping
-	pingTime, errPing := getPing(conn)
+	pingTime, errPing := Ping(conn)
 	if errPing != nil {
 		return nil, errPing
 	}
@@ -101,42 +91,4 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 	conn.Close()
 
 	return status, nil
-}
-
-func getPing(conn *protocol.Conn) (time.Duration, error) {
-	lock.Lock()
-	defer func() {
-		lock.Unlock()
-	}()
-
-	// Parse the IPAddr
-	ipAddr, errIp := net.ResolveIPAddr("ip4", conn.IP)
-	if errIp != nil {
-		return 0, errIp
-	}
-
-	// Only ping on IP at a time
-	pinger.AddIPAddr(ipAddr)
-
-	// When a ping response got back
-	ch := make(chan time.Duration, 1)
-	pinger.OnRecv = func(addr *net.IPAddr, rtt time.Duration) {
-		ch <- rtt
-	}
-
-	// When timeout
-	pinger.OnIdle = func() {
-		ch <- time.Second
-	}
-
-	// Run
-	err := pinger.Run()
-	if err != nil {
-		pinger.RemoveIPAddr(ipAddr)
-		return 0, err
-	}
-
-	chOut := <-ch
-	pinger.RemoveIPAddr(ipAddr)
-	return chOut, nil
 }
