@@ -71,7 +71,7 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 			if animatedFavicon {
 				status.Favicons = append(status.Favicons, favicon)
 				status.Favicon = additionalStatus.Favicon
-			} else {
+			} else if status.Players.Online != 0 {
 				break
 			}
 		}
