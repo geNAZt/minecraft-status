@@ -130,7 +130,7 @@ func NewNetClient(host string) (*Conn, error) {
 
 		// Connect
 		tempConn, err := net.Dial("tcp", newHost+":"+port)
-		if err != nil && len(ip) == 0 {
+		if err != nil && len(ip) == 1 {
 			return nil, err
 		} else if err != nil {
 			// Remove this ip
