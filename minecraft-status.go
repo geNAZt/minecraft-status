@@ -40,7 +40,7 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 
 	// Get the ping
 	tempPingTime, errPing := Ping(conn)
-	if errPing == nil {
+	if errPing == nil && tempPingTime > 0 {
 		pingTime = tempPingTime
 	}
 
