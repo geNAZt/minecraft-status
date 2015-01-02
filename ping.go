@@ -31,7 +31,7 @@ type icmpMessageBody interface {
 	Marshal() ([]byte, error)
 }
 
-var sq int32
+var sq int
 
 func init() {
 	sq = 0
