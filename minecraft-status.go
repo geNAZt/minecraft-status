@@ -7,8 +7,18 @@ import (
 	"github.com/tatsushid/go-fastping"
 	"net"
 	"reflect"
+	"sync"
 	"time"
 )
+
+var (
+	pinger *fastping.Pinger
+	lock   sync.Mutex
+)
+
+func init() {
+	pinger = fastping.NewPinger()
+}
 
 func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 	// Create Client
@@ -94,6 +104,9 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 }
 
 func getPing(conn *protocol.Conn) (time.Duration, error) {
+	lock.Lock()
+	defer lock.Unlock()
+
 	// Parse the IPAddr
 	ipAddr, errIp := net.ResolveIPAddr("ip4", conn.IP)
 	if errIp != nil {
@@ -101,22 +114,21 @@ func getPing(conn *protocol.Conn) (time.Duration, error) {
 	}
 
 	// Only ping on IP at a time
-	p := fastping.NewPinger()
-	p.AddIPAddr(ipAddr)
+	pinger.AddIPAddr(ipAddr)
 
 	// When a ping response got back
 	ch := make(chan time.Duration, 1)
-	p.OnRecv = func(addr *net.IPAddr, rtt time.Duration) {
+	pinger.OnRecv = func(addr *net.IPAddr, rtt time.Duration) {
 		ch <- rtt
 	}
 
 	// When timeout
-	p.OnIdle = func() {
-		ch <- 10 * time.Second
+	pinger.OnIdle = func() {
+		ch <- time.Second
 	}
 
 	// Run
-	err := p.Run()
+	err := pinger.Run()
 	if err != nil {
 		return 0, err
 	}
