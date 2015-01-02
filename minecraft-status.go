@@ -2,9 +2,9 @@ package minecraftstatus
 
 import (
 	"encoding/json"
+	"github.com/geNAZt/go-fastping"
 	"github.com/geNAZt/minecraft-status/data"
 	"github.com/geNAZt/minecraft-status/protocol"
-	"github.com/geNAZt/go-fastping"
 	"net"
 	"reflect"
 	"sync"
@@ -105,8 +105,7 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 
 func getPing(conn *protocol.Conn) (time.Duration, error) {
 	lock.Lock()
-	defer func(){
-		pinger.RemoveIPAddr(ipAddr)
+	defer func() {
 		lock.Unlock()
 	}()
 
@@ -133,9 +132,11 @@ func getPing(conn *protocol.Conn) (time.Duration, error) {
 	// Run
 	err := pinger.Run()
 	if err != nil {
+		pinger.RemoveIPAddr(ipAddr)
 		return 0, err
 	}
 
 	chOut := <-ch
+	pinger.RemoveIPAddr(ipAddr)
 	return chOut, nil
 }
