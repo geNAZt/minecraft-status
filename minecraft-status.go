@@ -63,6 +63,8 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 				continue
 			}
 
+			status = additionalStatus
+
 			if animatedFavicon {
 				favicon := data.Favicon{
 					Icon:        status.Favicon,
