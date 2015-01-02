@@ -164,9 +164,8 @@ func Ping(conn *protocol.Conn) (time.Duration, error) {
 		if _, err := c.Read(rb); err != nil {
 			return 0, err
 		}
-		if net == "ip4" {
-			rb = ipv4Payload(rb)
-		}
+
+		rb = ipv4Payload(rb)
 		if m, err = parseICMPMessage(rb); err != nil {
 			return 0, err
 		}
