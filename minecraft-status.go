@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"github.com/geNAZt/minecraft-status/data"
 	"github.com/geNAZt/minecraft-status/protocol"
-	"github.com/tatsushid/go-fastping"
+	"github.com/geNAZt/go-fastping"
 	"net"
 	"reflect"
 	"sync"
@@ -105,7 +105,10 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 
 func getPing(conn *protocol.Conn) (time.Duration, error) {
 	lock.Lock()
-	defer lock.Unlock()
+	defer func(){
+		pinger.RemoveIPAddr(ipAddr)
+		lock.Unlock()
+	}()
 
 	// Parse the IPAddr
 	ipAddr, errIp := net.ResolveIPAddr("ip4", conn.IP)
