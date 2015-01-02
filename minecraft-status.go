@@ -42,7 +42,7 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 	status.Ping = pingTime
 	status.Favicons = []data.Favicon{}
 
-	if animatedFavicon {
+	if animatedFavicon || status.Players.Online == 0 {
 		// Wait for additional Favicons (animated motd hack)
 		for {
 			starttime := time.Now()
@@ -68,8 +68,12 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 				DisplayTime: int32(time.Now().Sub(starttime) / time.Millisecond),
 			}
 
-			status.Favicons = append(status.Favicons, favicon)
-			status.Favicon = additionalStatus.Favicon
+			if animatedFavicon {
+				status.Favicons = append(status.Favicons, favicon)
+				status.Favicon = additionalStatus.Favicon
+			} else {
+				break
+			}
 		}
 	}
 
