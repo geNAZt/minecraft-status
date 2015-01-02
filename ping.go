@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"minecraft-status/protocol"
+	"github.com/geNAZt/minecraft-status/protocol"
 	"net"
 	"os"
 	"time"
