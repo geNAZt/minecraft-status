@@ -63,12 +63,12 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 				continue
 			}
 
-			favicon := data.Favicon{
-				Icon:        status.Favicon,
-				DisplayTime: int32(time.Now().Sub(starttime) / time.Millisecond),
-			}
-
 			if animatedFavicon {
+				favicon := data.Favicon{
+					Icon:        status.Favicon,
+					DisplayTime: int32(time.Now().Sub(starttime) / time.Millisecond),
+				}
+
 				status.Favicons = append(status.Favicons, favicon)
 				status.Favicon = additionalStatus.Favicon
 			} else if status.Players.Online != 0 {
