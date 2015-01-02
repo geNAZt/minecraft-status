@@ -71,6 +71,7 @@ type Conn struct {
 
 	Host string
 	Port uint16
+	IP   string
 }
 
 type Deadliner interface {
@@ -157,6 +158,7 @@ func NewNetClient(host string) (*Conn, error) {
 		WriteDirection: Serverbound,
 		Host:           portSplits[0],
 		Port:           uint16(ui),
+		IP:             newHost,
 	}
 
 	return mcConn, nil

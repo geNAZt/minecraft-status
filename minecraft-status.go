@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"github.com/geNAZt/minecraft-status/data"
 	"github.com/geNAZt/minecraft-status/protocol"
+	"github.com/tatsushid/go-fastping"
+	"net"
 	"reflect"
 	"time"
 )
@@ -27,6 +29,13 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 	}
 
 	// Now we need to send a Ping
+	conn.SendClientStatusPing()
+	_, errPingPacket := conn.ReadPacket()
+	if errPingPacket != nil {
+		return nil, errPingPacket
+	}
+
+	// Get the ping
 	pingTime, errPing := getPing(conn)
 	if errPing != nil {
 		return nil, errPing
@@ -85,13 +94,33 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 }
 
 func getPing(conn *protocol.Conn) (time.Duration, error) {
-	starttime := time.Now()
-
-	conn.SendClientStatusPing()
-	pingPacket, errPingPacket := conn.ReadPacket()
-	if errPingPacket != nil && pingPacket != nil {
-		return 0, errPingPacket
+	// Parse the IPAddr
+	ipAddr, errIp := net.ResolveIPAddr("ip4", conn.IP)
+	if errIp != nil {
+		return 0, errIp
 	}
 
-	return time.Now().Sub(starttime), nil
+	// Only ping on IP at a time
+	p := fastping.NewPinger()
+	p.AddIPAddr(ipAddr)
+
+	// When a ping response got back
+	ch := make(chan time.Duration, 1)
+	p.OnRecv = func(addr *net.IPAddr, rtt time.Duration) {
+		ch <- rtt
+	}
+
+	// When timeout
+	p.OnIdle = func() {
+		ch <- 10 * time.Second
+	}
+
+	// Run
+	err := p.Run()
+	if err != nil {
+		return 0, err
+	}
+
+	chOut := <-ch
+	return chOut, nil
 }
