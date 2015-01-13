@@ -59,40 +59,36 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 	status.Ping = pingTime
 	status.Favicons = []data.Favicon{}
 
-	if animatedFavicon || status.Players.Online == 0 {
-		// Wait for additional Favicons (animated motd hack)
-		for {
-			starttime := time.Now()
-			additionalStatusPacket, errPacket := conn.ReadPacket()
-			if errPacket != nil {
-				break
+	// Wait for additional Favicons (animated motd hack)
+	for {
+		starttime := time.Now()
+		additionalStatusPacket, errPacket := conn.ReadPacket()
+		if errPacket != nil {
+			break
+		}
+
+		// Check if packet is correct
+		if !reflect.TypeOf(additionalStatusPacket).AssignableTo(reflect.TypeOf(protocol.StatusResponse{})) {
+			continue
+		}
+
+		// Parse the status
+		additionalStatus := &data.Status{}
+		errJson := json.Unmarshal([]byte(additionalStatusPacket.(protocol.StatusResponse).Data), additionalStatus)
+		if errJson != nil {
+			continue
+		}
+
+		status = additionalStatus
+
+		if animatedFavicon {
+			favicon := data.Favicon{
+				Icon:        status.Favicon,
+				DisplayTime: int32(time.Now().Sub(starttime) / time.Millisecond),
 			}
 
-			// Check if packet is correct
-			if !reflect.TypeOf(additionalStatusPacket).AssignableTo(reflect.TypeOf(protocol.StatusResponse{})) {
-				continue
-			}
-
-			// Parse the status
-			additionalStatus := &data.Status{}
-			errJson := json.Unmarshal([]byte(additionalStatusPacket.(protocol.StatusResponse).Data), additionalStatus)
-			if errJson != nil {
-				continue
-			}
-
-			status = additionalStatus
-
-			if animatedFavicon {
-				favicon := data.Favicon{
-					Icon:        status.Favicon,
-					DisplayTime: int32(time.Now().Sub(starttime) / time.Millisecond),
-				}
-
-				status.Favicons = append(status.Favicons, favicon)
-				status.Favicon = additionalStatus.Favicon
-			} else if status.Players.Online != 0 {
-				break
-			}
+			status.Favicons = append(status.Favicons, favicon)
+			status.Favicon = additionalStatus.Favicon
 		}
 	}
 
