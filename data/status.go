@@ -1,7 +1,5 @@
 package data
 
-import "time"
-
 type MCVersion struct {
 	Name     string  `json:"name"`
 	Protocol float64 `json:"protocol"`
