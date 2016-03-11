@@ -27,27 +27,11 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 	}
 
 	// Now we need to send a Ping
-	var pingTime time.Duration
-	starttime := time.Now()
-
 	conn.SendClientStatusPing()
 	_, errPingPacket := conn.ReadPacket()
 	if errPingPacket != nil {
 		return nil, errPingPacket
 	}
-
-	pingTime = time.Now().Sub(starttime)
-
-	ch := make(chan bool, 1)
-	go func() {
-		// Get the ping
-		tempPingTime, errPing := Ping(conn)
-		if errPing == nil && tempPingTime > 0 {
-			pingTime = tempPingTime
-		}
-
-		ch <- true
-	}()
 
 	// Parse the status
 	status := &data.Status{}
@@ -56,7 +40,6 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 		return nil, errJson
 	}
 
-	status.Ping = pingTime
 	status.Favicons = []data.Favicon{}
 
 	// Wait for additional Favicons (animated motd hack)
@@ -94,6 +77,5 @@ func GetStatus(host string, animatedFavicon bool) (*data.Status, error) {
 
 	conn.Close()
 
-	<-ch
 	return status, nil
 }

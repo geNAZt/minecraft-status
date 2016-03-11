@@ -21,6 +21,5 @@ type Status struct {
 	Version     *MCVersion `json:"version"`
 	Players     *MCPlayers `json:"players"`
 	Favicon     string     `json:"favicon"`
-	Ping        time.Duration
 	Favicons    []Favicon
 }
