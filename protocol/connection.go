@@ -89,41 +89,35 @@ func NewNetClient(host string) (*Conn, error) {
 		port = portSplits[1]
 	}
 
-	// Check if we have a A record for this subdomain
+	// Parse the host string
+	hostSplits := strings.Split(portSplits[0], ".")
+
+	// Init variables
 	var ip []net.IP;
-	tempIp, errIp := net.LookupIP(newHost)
-	if errIp != nil {
-		// Parse the host string
-		hostSplits := strings.Split(portSplits[0], ".")
 
-		// Ignore subdomains for the SRV checks
-		if len(hostSplits) > 2 {
-			newHost = hostSplits[len(hostSplits)-2] + "." + hostSplits[len(hostSplits)-1]
-		}
-
-		// First try SRV
-		cname, srv, err := net.LookupSRV("minecraft", "tcp", newHost)
-		if err != nil || cname != "" {
-			// Ignore this error
-		}
-
-		// We found a SRV record use it
-		if len(srv) > 0 {
-			port = strconv.FormatUint(uint64(srv[0].Port), 10)
-			newHost = srv[0].Target
+	// Boy we have a subdomain here
+	if len(hostSplits) > 2 {
+		tempIp, errIp := net.LookupIP(newHost)
+		if errIp == nil {
+			ip = tempIp;
 		} else {
-			newHost = portSplits[0]
-		}
+			srvHost := hostSplits[len(hostSplits)-2] + "." + hostSplits[len(hostSplits)-1];
+			tempIP, tempPort, err := resolveSRV( srvHost, srvHost );
+			if err != nil {
+				return nil, err
+			}
 
-		// Get the A record
-		srvIp, errIp := net.LookupIP(newHost)
-		if errIp != nil {
-			return nil, errIp
+			ip = tempIP
+			port = tempPort
 		}
-
-		ip = srvIp
 	} else {
-		ip = tempIp
+		tempIP, tempPort, err := resolveSRV( portSplits[0], portSplits[0] );
+		if err != nil {
+			return nil, err
+		}
+
+		ip = tempIP
+		port = tempPort
 	}
 
 	// Fix invalid argument to rand
@@ -171,6 +165,32 @@ func NewNetClient(host string) (*Conn, error) {
 	}
 
 	return mcConn, nil
+}
+
+func resolveSRV(srvHost string, aHost string) (ips []net.IP, port string, err error) {
+	port = "25565";
+
+	// First try SRV
+	cname, srv, err := net.LookupSRV("minecraft", "tcp", srvHost)
+	if err != nil || cname != "" {
+		// Ignore this error
+	}
+
+	// We found a SRV record use it
+	if len(srv) > 0 {
+		port = strconv.FormatUint(uint64(srv[0].Port), 10)
+		srvHost = srv[0].Target
+	} else {
+		srvHost = aHost
+	}
+
+	// Get the A record
+	srvIp, errIp := net.LookupIP(srvHost)
+	if errIp != nil {
+		return nil, "", errIp
+	}
+
+	return srvIp, port, nil
 }
 
 func (conn *Conn) Close() {
